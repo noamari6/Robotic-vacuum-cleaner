@@ -1,0 +1,253 @@
+#include <LiquidCrystal.h>
+const byte interrupt_ir0 = 18, interrupt_ir1 = 19;
+const byte trig = 6, echo = 7;
+const byte disUltra = 20, disIR = 200, disIRint = 80;
+int distance,IR0,IR1;
+int i;
+LiquidCrystal lcd(31, 35, 30, 32, 34, 36);
+/*
+The circuit LCD screen:
+ * LCD RS pin to digital pin 31
+ * LCD Enable pin to digital pin 35
+ * LCD D4 pin to digital pin 30
+ * LCD D5 pin to digital pin 32
+ * LCD D6 pin to digital pin 34
+ * LCD D7 pin to digital pin 36
+ * LCD R/W pin to ground
+ * LCD VSS pin to ground
+ * LCD VCC pin to 5V
+*/
+void lcd_turn(){
+  switch(i){
+    case 0:  lcd.print("Forward");
+             delay(1000);
+             lcd.clear();
+      break;
+    case 1:  lcd.print("Right");
+             delay(1000);
+             lcd.clear();
+      break;
+    case 2:  lcd.print("Left");
+             delay(1000);
+             lcd.clear();
+      break;
+    case 3: 
+             lcd.print("Reverse");
+             delay(1000);
+             lcd.clear();
+      break;
+    default: lcd.print("Error");
+             delay(1000);
+             lcd.clear();
+  }
+}
+void Forward(){
+  digitalWrite(2,1);
+  digitalWrite(3,0);
+  digitalWrite(4,1);
+  digitalWrite(5,0);
+  i=0;
+  lcd_turn();
+}
+void RotateRight(){
+  digitalWrite(2,0);
+  digitalWrite(3,0);
+  digitalWrite(4,1);
+  digitalWrite(5,0);
+  i=1;
+  lcd_turn();
+}
+void RotateLeft(){
+  digitalWrite(2,1);
+  digitalWrite(3,0);
+  digitalWrite(4,0);
+  digitalWrite(5,0);
+  i=2;
+  lcd_turn();
+}
+void Reverse(){
+  digitalWrite(2,0);
+  digitalWrite(3,1);
+  digitalWrite(4,0);
+  digitalWrite(5,1);
+  i=3;
+  lcd_turn();
+}
+void analogReadIR(){
+  IR1=analogRead(A1);
+  Serial.println(IR1);
+  Serial.print("\t");
+  IR0=analogRead(A0);
+  Serial.println(IR0);
+  delay(1000);
+}
+
+void IR(){
+  Serial.println("interrupt");
+  if(distance<disUltra){
+    if(IR0<disIRint &&IR1<disIRint){
+      digitalWrite(2,0);
+      digitalWrite(3,1);
+      digitalWrite(4,0);
+      digitalWrite(5,1);
+    }
+  }
+}
+void ultrasonic(){
+  if(distance<disUltra){
+ Reverse:  if(IR0<disIR &&IR1<disIR){
+              Reverse();
+             lcd.setCursor(0, 1);
+              lcd.print("ERROR! Reverse");
+              Serial.println("Error!");
+  }
+  else if(IR0>disIR &&IR1<disIR){
+                 RotateRight();    //U-turn Right
+                 delay(1000);
+                 Forward();
+                 delay(1000);
+                 RotateRight();
+                 delay(1000);
+                 Forward();
+  }
+  else if(IR0<disIR &&IR1>disIR){
+                 RotateLeft();      //U-turn Left:
+                 delay(1000);
+                 Forward();
+                 RotateLeft();
+                 delay(1000);
+                 Forward();
+  }
+  
+ }
+}
+void setup() {
+   Serial.begin(9600);
+   Serial2.begin(9600);
+  lcd.begin(16, 2);
+  lcd.print("   ");
+  pinMode(trig,OUTPUT);
+  pinMode(echo,INPUT);
+  pinMode(2,OUTPUT);     //motor 1
+  pinMode(3,OUTPUT);     //motor 1
+  pinMode(4,OUTPUT);     //motor 2
+  pinMode(5,OUTPUT);     //motor 2
+  
+  pinMode(13,OUTPUT);    //fan
+  pinMode(14,OUTPUT);    //fan
+  pinMode(interrupt_ir0,INPUT);
+  pinMode(interrupt_ir1,INPUT);
+  attachInterrupt(digitalPinToInterrupt(interrupt_ir0), IR, FALLING); 
+  attachInterrupt(digitalPinToInterrupt(interrupt_ir1), IR, FALLING);
+  
+  }
+int time,mode;
+
+void loop()
+{
+  detachInterrupt(digitalPinToInterrupt(interrupt_ir0));
+  detachInterrupt(digitalPinToInterrupt(interrupt_ir1));
+  if(Serial2.available()>0)
+  {
+    mode=Serial2.read();
+    Serial.println("recive");
+  }
+  if(mode=='5')
+ {
+  attachInterrupt(digitalPinToInterrupt(interrupt_ir0), IR, FALLING); 
+  attachInterrupt(digitalPinToInterrupt(interrupt_ir1), IR, FALLING);
+  digitalWrite(2,1);
+  digitalWrite(3,0);
+  digitalWrite(4,1);
+  digitalWrite(5,0);
+  digitalWrite(13,1);//fan
+  digitalWrite(14,0);//fan
+  analogWrite(12,255);//fan
+  lcd.setCursor(0,1);
+  analogReadIR();
+  ultrasonic();
+  digitalWrite(trig,HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trig,LOW);
+  while(digitalRead(echo)==0);
+  time=micros();
+  while(digitalRead(echo)==1);
+  time=micros()-time;
+  distance=time/58;
+  Serial.print("distance=");
+  Serial.println(distance);
+}
+  if(mode=='6')
+{
+  detachInterrupt(digitalPinToInterrupt(interrupt_ir0));
+  detachInterrupt(digitalPinToInterrupt(interrupt_ir1));
+  digitalWrite(2,0);
+  digitalWrite(3,0);
+  digitalWrite(4,0);
+  digitalWrite(5,0);
+  digitalWrite(13,0);//fan
+  digitalWrite(14,0);//fan
+  analogWrite(12,0);//fan
+}
+else
+{
+  detachInterrupt(digitalPinToInterrupt(interrupt_ir0));
+  detachInterrupt(digitalPinToInterrupt(interrupt_ir1));
+  
+  switch (Serial2.read()) {
+  case 'F':
+    Serial.println("Drive Forward");
+    digitalWrite(13,1);//fan
+    digitalWrite(14,0);//fan
+    analogWrite(12,255);//fan
+    digitalWrite(2,1);
+    digitalWrite(3,0);
+    digitalWrite(4,1);
+    digitalWrite(5,0);
+    break;
+  case 'R':
+    Serial.println("Turn Right") ; 
+    digitalWrite(13,1);//fan
+    digitalWrite(14,0);//fan
+    analogWrite(12,255);//fan
+    digitalWrite(2,0);
+    digitalWrite(3,0);
+    digitalWrite(4,1);
+    digitalWrite(5,0);
+    break;
+  case 'L':
+    Serial.println("Turn Left"); 
+    digitalWrite(13,1);//fan
+    digitalWrite(14,0);//fan
+    analogWrite(12,255);//fan
+    digitalWrite(2,1);
+    digitalWrite(3,0);
+    digitalWrite(4,0);
+    digitalWrite(5,0);
+    break;
+  case 'G':
+    Serial.println("Back up"); 
+    digitalWrite(13,1);//fan
+    digitalWrite(14,0);//fan
+    analogWrite(12,255);//fan
+    digitalWrite(2,0);
+    digitalWrite(3,1);
+    digitalWrite(4,0);
+    digitalWrite(5,1);
+    break;
+  case 'S':
+    Serial.println("Stop"); 
+    digitalWrite(2,0);
+    digitalWrite(3,0);
+    digitalWrite(4,0);
+    digitalWrite(5,0);
+    digitalWrite(13,0);//fan
+    digitalWrite(14,0);//fan
+    analogWrite(12,0);//fan
+    break;
+  default:
+    break;
+    
+  }
+  
+} 
